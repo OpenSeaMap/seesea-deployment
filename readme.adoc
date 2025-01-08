@@ -1,0 +1,13 @@
+= setup test environment for postprocess 
+
+== prepare build directory
+
+----
+./script/prepare_volumes.sh
+----
+
+== start docker
+
+----
+docker compose up -d --build
+----

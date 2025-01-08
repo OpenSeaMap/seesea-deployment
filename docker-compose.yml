@@ -1,0 +1,77 @@
+services: 
+
+  postgis:
+    image: postgis:2.3
+    build: ./src/postgis/2.3
+    hostname: depth-postgis
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes: 
+      - ./volumes/backup:/backup
+      - ./volumes/postgis/transfer:/transfer
+      - ./volumes/postgis/data:/var/lib/postgresql/data
+      - ./volumes/postgis/log:/var/log/postgresql/
+      - ./volumes/postgis/etc/postgresql/9.6/main/postgresql.conf:/etc/postgresql/9.6/main/postgresql.conf
+      - ./volumes/postgis/etc/postgresql/9.6/main/pg_hba.conf:/etc/postgresql/9.6/main/pg_hba.conf
+      - ./volumes/postgis/etc/postgresql/9.6/main/pg_ident.conf:/etc/postgresql/9.6/main/pg_ident.conf
+    logging:
+      driver: "json-file"
+      options:
+          max-size: "100m"
+    networks:
+      db:
+      proxy:
+    ports:
+      - "5432:5432"
+    command: run
+
+  # depth postprocess
+  postprocess:
+    image: postprocess:1
+    build: ./src/postprocess/1
+    hostname: postprocess
+    restart: unless-stopped
+    depends_on:
+      - postgis
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes: 
+      - ./volumes/postprocess/app:/app
+      - ./volumes/postprocess/rawdata/:/app/data
+      - ./volumes/postprocess/seesea/:/seesea/
+      - ./volumes/postprocess/.repository/:/.repository/
+    logging:
+      driver: "json-file"
+      options:
+          max-size: "100m"
+    networks:
+      db:
+      proxy:
+    command: run
+
+  pgadmin:
+    image: dpage/pgadmin4:3.0
+    hostname: pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 10
+    volumes:
+      - ./volumes/pgadmin:/var/lib/pgadmin
+    ports:
+      - "8888:80"
+    networks:
+      db:
+      proxy:
+    command: run
+
+
+# Custom network so all services can communicate using a FQDN
+networks:
+  db:
+  proxy:
+    external: true

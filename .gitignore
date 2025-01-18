@@ -1,0 +1,7 @@
+volumes/postprocess/seesea/*
+.env
+volumes/pgadmin/*
+volumes/postgis/*
+volumes/postprocess/.repository/*
+volumes/postprocess/app/*
+volumes/postprocess/seesea/*

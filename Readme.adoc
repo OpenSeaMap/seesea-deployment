@@ -1,0 +1,56 @@
+= setup test environment for postprocess 
+:toc:
+
+== clone the sources
+
+----
+git clone git@github.com:OpenSeaMap/seesea-deployment.git
+----
+
+== prepare build directory
+
+----
+cd seesea-deployment
+./script/prepare_volumes.sh
+----
+
+== start docker container
+
+----
+docker compose up -d --build
+----
+
+== join docker container
+----
+docker compose exec postprocess bash
+----
+
+=== build sw and deploy
+----
+cd /seesea
+git checkout remotes/origin/stevo-dev ./volumes/postprocess/seesea
+mvn -f net.sf.seesea.aggregator/pom.xml -Dmaven.repo.local=/.repository -X clean install
+
+# deploy to directory /app/postprocess
+10_scripts/deploy_app.sh
+----
+
+=== Setup Databases
+
+The following command 
+- creates the databases osmapi and depth
+- apply the database schema for osmapi and depth
+- create database user osm and osmapi
+
+----
+10_scripts/resetdb.sh
+----
+
+=== start processing
+
+----
+10_scripts/runpostprocessing.sh
+----
+
+
+

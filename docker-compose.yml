@@ -9,8 +9,6 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes: 
-      - ./volumes/backup:/backup
-      - ./volumes/postgis/transfer:/transfer
       - ./volumes/postgis/data:/var/lib/postgresql/data
       - ./volumes/postgis/log:/var/log/postgresql/
       - ./volumes/postgis/etc/postgresql/9.6/main/postgresql.conf:/etc/postgresql/9.6/main/postgresql.conf

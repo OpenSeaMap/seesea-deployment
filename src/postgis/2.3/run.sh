@@ -18,6 +18,7 @@ function createPostgresConfig() {
 
 
 function initDb() {
+  echo "start initDb"
   chown -R postgres:postgres /var/lib/postgresql
   sudo -u postgres /usr/lib/postgresql/9.6/bin/initdb -D /var/lib/postgresql/data
 }
@@ -71,7 +72,20 @@ if [ "$1" = "run" ]; then
     echo "host  all   osmsync   $IPADDR/16   md5" >> /etc/postgresql/9.6/main/pg_hba.conf
   
     # createPostgresConfig
-    # initDb
+
+    if [ ! -f "/etc/postgresql/9.6/main/postgresql.custom.conf" ]; then
+      createPostgresConfig
+    else
+      echo "skip initDb"
+    fi
+
+    if [ ! -f "/var/lib/postgresql/data/PG_VERSION" ]; then
+      initDb
+    else
+      echo "skip initDb"
+    fi
+
+    echo "start postgresql service"
     service postgresql start
     # setPostgresPassword
 

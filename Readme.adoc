@@ -1,11 +1,31 @@
 = setup test environment for postprocess 
 :toc:
+:sectnums:
+
+
+== overview
+This document describes how to setup a test environment for the postprocessing 
+operations implemented in the seeSea project.
 
 == clone the sources
 
 ----
 git clone git@github.com:OpenSeaMap/seesea-deployment.git
 ----
+
+== create file .env 
+
+create a file with name .env and insert following variables:
+----
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=admin
+POSTGRES_HOST=postgis
+POSTGRES_PORT=5432
+PGADMIN_DEFAULT_EMAIL=admin@admin.com
+PGADMIN_DEFAULT_PASSWORD=alkufdh7
+----
+
+Note: do not commit that file into github repository.
 
 == prepare build directory
 
@@ -25,7 +45,7 @@ docker compose up -d --build
 docker compose exec postprocess bash
 ----
 
-=== build sw and deploy
+=== build and deploy the seeSea postprocessing application
 ----
 cd /seesea
 git checkout remotes/origin/stevo-dev ./volumes/postprocess/seesea
@@ -51,6 +71,4 @@ The following command
 ----
 10_scripts/runpostprocessing.sh
 ----
-
-
 

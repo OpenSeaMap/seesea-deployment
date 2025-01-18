@@ -1,0 +1,394 @@
+= depth application / postprocessing
+:toc:
+:sectnums:
+:docbook:
+
+== relevant source code repos
+- http://svn.code.sf.net/p/seesea/code/trunk (sourceforge)
+- https://github.com/OpenSeaMap/seesea (mirrow: github)
+
+== relevant documentation
+
+- https://depth.openseamap.org/#documentation[depth.openseamap.org - documentation]
+- https://depth.openseamap.org/#contribute[depth.openseamap.org - contrubute]
+- https://wiki.openseamap.org/wiki/OpenSeaMap-dev:Portal[developer wiki]
+- https://forum.openseamap.org/
+- wiki
+- server / docfiles
+- https://sourceforge.net/projects/openseamap/lists/openseamap-develop[mailing list]
+https://github.com/OpenSeaMap/depth_webfrontend/issues/
+
+
+== Overview postgis database
+
+The application is using two databases based on postgresql / postgis.
+
+=== osmapi
+This database is designed to store user information and related metadata. It supports the management of user profiles, track data, sensor readings, and vessel configurations. The following table provides an overview of the various tables within the database, along with a brief description of their purpose.
+
+[cols="1,3", options="header"]
+|===
+| Table Name | Description
+
+| depthsensor
+| Stores information about depth sensors, such as sensor IDs, specifications, or configurations.
+
+| gauge
+| Contains information about gauges, such as water-level gauges, including their locations and properties.
+
+| gaugemeasurement
+| Stores measurements recorded by the gauges, likely linking to the `gauge` table.
+
+| license
+| Holds data related to licensing, potentially for user access or usage permissions.
+
+| rpl_journal
+| A replication log or journal for tracking operations, possibly for synchronization or backups.
+
+| sbassensor
+| Contains information about SBAS (Satellite-Based Augmentation System) sensors used for geolocation corrections.
+
+| spatial_ref_sys
+| Defines spatial reference systems for geospatial data, commonly found in spatial databases.
+
+| tmp_tg_user_profiles
+| Temporary storage for user profile data, likely used for intermediate processing or migration.
+
+| tmp_tg_user_tracks_2018_12_03
+| Temporary storage for user track data, potentially part of an import or migration process.
+
+| track_info
+| Metadata about tracks, such as start/end coordinates, timestamps, or vessel-related information.
+
+| trackgauges
+| Maps tracks (`track_info`) to specific gauges used during recordings.
+
+| user_profiles
+| Stores user-related data, such as names, roles, or preferences.
+
+| user_tracks
+| Contains tracks or paths uploaded or created by users, linked to `user_profiles`.
+
+| userroles
+| Manages user roles and permissions within the application.
+
+| vesselconfiguration
+| Stores configurations or settings related to vessels, including IDs, sensor setups, or operational parameters.
+|===
+
+link:https://wiki.openseamap.org/wiki/OpenSeaMap-dev:De:Depth_meta_data[Depth_meta_data]
+
+
+=== depth
+The depth database appears to be a comprehensive geospatial database primarily focused on managing and analyzing depth-related data, such as water depths, terrain features, and trackpoints collected from sensors. It contains 168 tables organized around several key purposes:
+
+- Geospatial Data: Includes tables for different zoom levels (zoom_*), geospatial contours (contours_*), polygons (big_polygon, waterpolygon), and specific features like shallow water regions (shallowwater).
+
+- Trackpoint Data: Stores raw, processed, and test datasets of trackpoints, indicating movement paths or recorded sensor tracks (trackpoints_*).
+
+- Metadata and Configuration: Manages spatial reference systems (spatial_ref_sys), merging operations (mergerun), and validation information (gueltig).
+
+- Specialized Data: Contains datasets like GEBCO contours (gebco_contours_2014), BSH points (bsh_points), and crowded depth areas (crowded_deeps), suggesting integration with external data sources or specialized studies.
+
+The database is well-structured for depth analysis, supporting detailed zoom levels, geospatial features, and extensive track data processing, making it ideal for maritime, environmental, or geospatial applications.
+
+
+[cols="1,3", options="header"]
+|===
+| Table Name           | Description
+
+| zoom_*               | Geospatial data at different zoom levels (e.g., points, contours, fishnet grids).
+| trackpoints_*        | Raw, processed, or test trackpoint data from sensors or tracking systems.
+| contours_*           | Geospatial contour data, possibly for depth or terrain analysis.
+| big_polygon          | Large geospatial polygons for a specific purpose (e.g., water or terrain boundaries).
+| waterpolygon         | Polygons representing water bodies.
+| spatial_ref_sys      | Metadata for spatial reference systems (standard table).
+| shallowwater         | Data related to shallow water regions.
+| gebco_contours_2014  | GEBCO 2014 dataset contours.
+| mergerun             | Metadata for merging operations, possibly track or geospatial data.
+|===
+
+== Overview Procedures
+
+=== upload of depth data via frontend / backend
+
+- The OpenSeaMap depth contributer can login to webpage and upload tracks.
+- The uploaded files are stored on filesystem of harddisk (outside the database)
+- Additional a new entry in database "osmapi" table "user_tracks" will be generated.
+
+=== postprocess description
+
+The postprocess is splitet into several steps
+
+ 1: pull data from osmapi database. The procedure is realised in database "depth" function "osmapi_tables.pullfromosmapi()".
+ 2: eclipse (java/osgi application SeeSea Projekt)  
+    - connect to database "osmapi", and check if table "user_tracks" includes new enttry for tracks that needs to be procecced.
+    - analyse the "download file" and determine the format
+    - unpack files if they are stored un compressed container
+    - process the files, detect tracks and store tracks and data points in depth database
+    - update status in database 
+ 3: database "depth" function "dofillrawrendertables()"
+ 4: database "depth" function "domergerun()"
+ 5: database "osmapi" function "pullfromdepth()"
+ 
+Beside that procedures, several other functions are triggered by "updates".
+
+trigger name: 
+
+  - public.fub_utr()
+  - public.rpl_log()
+
+==== osmapi_tables.pullfromosmapi()
+The osmapi_tables.pullfromosmapi() function synchronizes data between an external FDW source (osmapi_fdw) and local tables in the osmapi_tables schema. It processes changes (inserts and updates) by copying new records into a shadow journal, iterating over them, and updating the respective local tables based on the table name and operation type. Privacy-sensitive fields in user_profiles are anonymized, and sequences are adjusted to ensure key integrity. The function is efficient, but it could benefit from better error handling, transaction management, and scalability improvements for large datasets. It returns the number of rows processed.
+
+==== eclipse (java/osgi application SeeSea Project) 
+The following functions and classes are relevant for postprocessing: 
+
+[code, java]
+----
+PreprocessingApplication.java - start()
+   - sleep 10 seconds
+   - uploadedData2Contours.processData()
+     - depthDataSync.downloadFiles();
+     - depthDataSync.downloadSQL();
+     - contentDetector2.setContentTypes();
+         getTrackFiles2Process()
+     - filterEngine2.filterTracks();
+        - filterNoTime();
+          - process()
+            - processFile()
+              - processMeasurements()
+                - processSingleMeasurement()
+			  - filterTimeTracks();
+     - updateContourLines(null, null, null, null);
+----
+
+[cols="1,3", options="header"]
+|===
+| methode Name            | Description
+| getTrackFiles2Process   | Determines the track ids that need reprocessing. Due to configuration this may be even more that what was recently uploaded. (new uploaded files)
+|storePreprocessingStates | stores the current state of track files to the persistent storage
+|===
+
+==== dofillrawrendertables()
+The dofillrawrendertables() function processes single tracks from the database for rendering purposes. It uses a time-limited loop to iterate through eligible tracks and invokes the fillrendertables() function for processing. While functional, there is room for optimization in terms of error handling, performance, and scalability.
+
+==== domergerun()
+This function processes and merges tracks within a 10-minute time limit, maintaining a log of processed tracks and runs.
+ 
+==== pullfromdepth()
+The pullfromdepth() function synchronizes data between foreign tables (depth_fdw) and local tables (depth_tables) by processing operations (INSERT, UPDATE, DELETE) recorded in a journal table (rpl_journal_shadow). It inserts, updates, or deletes records in local tables based on the changes in the foreign tables, ensuring consistency. The function also adjusts sequence values to maintain primary key integrity.
+
+
+==== MergeTrack() 
+t.b.d.
+
+==== mergetrackpoints()
+t.b.d.
+
+
+== logging
+
+[cols="3,3,6"]
+|===
+| File | Source | Likely Cause
+| ./log.txt | Main logging framework (e.g., Log4j or Logback) | Standard log file configured for application-wide logging.
+| ./configuration/*.log | Dynamically generated by a specific component or library in the application. | A specific module or library writes additional logs for debugging or diagnostics.
+| ./err.log | Redirected stderr output. | Application is not writing to stderr, relying instead on its logging system.
+|===
+
+== processing states
+
+NOTE: states taken form file ProcessingState.java
+
+    UPLOAD_INCOMPLETE(0)
+    UPLOAD_COMPLETE(1)
+    FILE_CORRUPT(2)
+    PREPROCESSED(3)
+    FILE_CONTENT_UNKNOWN(4)
+    FILE_DUPLICATE(5)
+    FILE_PROCESSED(6)
+    FILE_NODATA(7)
+    REPROCESS(8)
+    CONTOURS_GENERATED(9)
+    REPROCESS_CONTOURS(10)
+    TRIANGULATED(11)
+    CLUSTERED(12)
+    NOABSOLUTETIME(13)
+    PROCESSING_ERROR(14)
+
+
+== open questions
+- Q: why the generation of contures is disabled? How to enable and test it?
+
+- Q: who writes the attribute "num_points" of table "user_tracks"?
+  A: see fub_utr() in depth_schema.sql
+
+- Q: Logging: Wie kann das Logging angepasst werden? Momentan landet alles in verschiedenen Dateien, was die Analyse erschwert.
+
+- Q: Konfiguration: Wie funktioniert die Konfiguration der verschiedenen Module?
+
+- Q: HttpDepthDataSync: Wie lässt sich dieses Feature abschalten? Ich vermute, Jens oder Thomas haben es eingebaut, um auch von zu Hause aus entwickeln zu können und die   Upload-Dateien der User vom Delta-Server zu laden. Auf dem Server verursacht es allerdings Probleme, da ich die User-Tracks nicht per HTTP-Download anbieten möchte.
+
+- Q: Datenbank-Leichen: In der Datenbank gibt es viele alte Einträge, die gelöscht werden sollten.
+
+- Q: Processing: Das Processing scheint wieder zu funktionieren, aber wie testet man die Funktion? Ich suche gerade nach einem Weg, einen Track in der Datenbank zu löschen und das Processing erneut anzustoßen.
+
+- Q: backup - how to backup relevant data (database and database schema, user tracks, sources, docker container scripts and documentation)
+
+== todo 
+- find new maintainer for solution ( update database, tomcat, webserver, ... )
+- backup - database and database schema, user tracks, sources, docker container scripts and documentation, source code
+- analyse and documentation complete postprocess procedures
+- optional: replace backend with new solution ( based on django, developed by Richard Kunzmann )
+- optional: replace postprocessing ( based on t.b.d. )
+
+
+== attachments
+
+=== configuration /config.ini
+
+[code, cfg]
+----
+eclipse.p2.profile=DefaultProfile
+osgi.framework=file\:plugins/org.eclipse.osgi_3.12.100.v20180210-1608.jar
+equinox.use.ds=true
+ds.delayed.keepInstances=true
+osgi.bundles=reference\:file\:javassist_3.20.0.GA.jar@4, ..., reference\:file\:javax.annotation-api_1.2.0.jar@4,reference\:file\:osgi.enterprise_5.0.0.201203141834.jar@4
+eclipse.product=net.sf.seesea.data.postprocessing.product
+osgi.framework.extensions=
+eclipse.p2.data.area=@config.dir/../p2
+osgi.bundles.defaultStartLevel=4
+eclipse.application=net.sf.seesea.data.postprocessing.application
+----
+
+==== list with OSGI Bundles
+
+osgi.bundles=reference\:file\:javassist_3.20.0.GA.jar@4,
+reference\:file\:javax.annotation-api_1.2.0.jar@4,
+reference\:file\:javax.validation.api_1.1.0.Final.jar@4,
+reference\:file\:javax.ws.rs-api_2.0.1.jar@4
+,reference\:file\:javax.xml_1.3.4.v201005080400.jar@4,
+reference\:file\:log4j_1.2.17.jar@4,
+reference\:file\:net.sf.seesea.content.api_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.content.tika_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.contour.api_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.contour.triangulation_1.0.0.202410211349.jar@4\:start,
+reference\:file\:net.sf.seesea.data.io_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.data.io.postgis_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.data.postprocessing_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.data.sync_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.data.sync.api_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.filter.api_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.filter.simple_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.gauge_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.gauge.germany.wsv_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.geometry_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.lib_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.model.core_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.navigation.sl2_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.navigation.winprofile.sharp_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.postprocess.product.logging_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.provider.navigation.adm_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.provider.navigation.fsh_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.provider.navigation.gpx_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.provider.navigation.nmea_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.provider.navigation.son_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.services.navigation_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.tidemodel.dtu10.java_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.track.api_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.track.model_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.track.persistence.database_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.triangulation_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.triangulation.cdelaunay_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.triangulation.postgis_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.waterlevel_1.0.0.202410211349.jar@4,
+reference\:file\:net.sf.seesea.waterlevel.gaugeocean_1.0.0.202410211349.jar@4\:start,
+reference\:file\:org.apache.commons.io_2.2.0.v201405211200.jar@4,
+reference\:file\:org.apache.commons.math3_3.6.1.jar@4,
+reference\:file\:org.apache.felix.fileinstall_3.5.4.jar@2\:start,
+reference\:file\:org.apache.felix.gogo.command_0.10.0.v201209301215.jar@4,
+reference\:file\:org.apache.felix.gogo.runtime_0.10.0.v201209301036.jar@4,
+reference\:file\:org.apache.felix.gogo.shell_0.10.0.v201212101605.jar@4,
+reference\:file\:org.apache.felix.scr_2.0.10.v20170501-2007.jar@4,
+reference\:file\:org.apache.tika.core_1.12.0.jar@4,
+reference\:file\:org.eclipse.core.contenttype_3.6.0.v20170207-1037.jar@4,
+reference\:file\:org.eclipse.core.jobs_3.9.3.v20180115-1757.jar@4,
+reference\:file\:org.eclipse.core.runtime_3.13.0.v20170207-1030.jar@4,
+reference\:file\:org.eclipse.emf.common_2.13.0.v20170609-0707.jar@4,
+reference\:file\:org.eclipse.emf.ecore_2.13.0.v20170609-0707.jar@4,
+reference\:file\:org.eclipse.emf.ecore.change_2.11.0.v20170609-0707.jar@4,
+reference\:file\:org.eclipse.emf.ecore.xmi_2.13.0.v20170609-0707.jar@4,
+reference\:file\:org.eclipse.equinox.app_1.3.400.v20150715-1528.jar@4,
+reference\:file\:org.eclipse.equinox.cm_1.2.0.v20170105-1446.jar@1\:start,
+reference\:file\:org.eclipse.equinox.common_3.9.0.v20170207-1454.jar@4,
+reference\:file\:org.eclipse.equinox.console_1.1.300.v20170512-2111.jar@4,
+reference\:file\:org.eclipse.equinox.console.ssh_1.0.200.v20170105-1446.jar@4,
+reference\:file\:org.eclipse.equinox.ds_1.5.0.v20170307-1429.jar@1\:start,
+reference\:file\:org.eclipse.equinox.event_1.4.0.v20170105-1446.jar@4,
+reference\:file\:org.eclipse.equinox.launcher_1.4.0.v20161219-1356.jar@4,
+reference\:file\:org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.551.v20171108-1834/@4,
+reference\:file\:org.eclipse.equinox.preferences_3.7.0.v20170126-2132.jar@4,
+reference\:file\:org.eclipse.equinox.registry_3.7.0.v20170222-1344.jar@4,
+reference\:file\:org.eclipse.equinox.util_1.0.500.v20130404-1337.jar@4,
+reference\:file\:org.eclipse.osgi.services_3.6.0.v20170228-1906.jar@4,
+reference\:file\:org.eclipse.osgi.util_3.4.0.v20170111-1608.jar@4,
+reference\:file\:org.eclipse.persistence.asm_6.0.0.v201710052159.jar@4,
+reference\:file\:org.eclipse.persistence.core_2.7.1.v20171221-bd47e8f.jar@4,
+reference\:file\:org.eclipse.persistence.moxy_2.7.1.v20171221-bd47e8f.jar@4,
+reference\:file\:org.glassfish.hk2.api_2.5.0.v20161103-0227.jar@4,
+reference\:file\:org.glassfish.hk2.external.aopalliance-repackaged_2.5.0.b30.jar@4,
+reference\:file\:org.glassfish.hk2.external.javax.inject_2.5.0.b30.jar@4,
+reference\:file\:org.glassfish.hk2.locator_2.5.0.v20161103-0227.jar@4,
+reference\:file\:org.glassfish.hk2.osgi-resource-locator_1.0.1.jar@4,
+reference\:file\:org.glassfish.hk2.osgi-resource-locator_2.5.0.v20161103-1916.jar@4,
+reference\:file\:org.glassfish.hk2.utils_2.5.0.v20160210-1508.jar@4,
+reference\:file\:org.glassfish.javax.json_1.0.4.jar@4,
+reference\:file\:org.glassfish.jersey.bundles.repackaged.jersey-guava_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.core.jersey-client_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.core.jersey-common_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.core.jersey-server_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.ext.jersey-entity-filtering_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.media.jersey-media-jaxb_2.25.0.jar@4,
+reference\:file\:org.glassfish.jersey.media.jersey-media-moxy_2.25.0.jar@4,
+reference\:file\:org.postgresql.jdbc41_9.4.1212.jre7.jar@4\:start,
+reference\:file\:osgi.enterprise_5.0.0.201203141834.jar@4
+
+=== notes - database 
+
+==== check db depth - remote server 
+\c depth
+SELECT srvname, srvoptions
+FROM pg_foreign_server
+WHERE srvname = 'osmapi';
+
+==== sample: change option "hostname"
+\c osmapi
+ALTER SERVER osmapi OPTIONS (SET host 'postgis');
+
+==== check db osmapi - remote server 
+\c osmapi
+SELECT srvname, srvoptions
+FROM pg_foreign_server
+WHERE srvname = 'depth';
+
+==== sample: change option "hostname"
+ALTER SERVER depth OPTIONS (SET host 'postgis');
+
+==== setup specific user for access to remote db
+CREATE USER osmsync WITH PASSWORD '!2osm2!';
+
+\c osmapi
+CREATE USER MAPPING FOR osmsync SERVER depth OPTIONS (user 'osmsync', password '!2osm2!');
+CREATE USER MAPPING FOR postgres SERVER depth OPTIONS (user 'osmsync', password '!2osm2!');
+GRANT USAGE ON SCHEMA public TO osmsync;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO osmsync;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO osmsync;
+
+\c depth  
+CREATE USER MAPPING FOR osmsync  SERVER osmapi OPTIONS (user 'osmsync', password '!2osm2!');
+CREATE USER MAPPING FOR postgres SERVER osmapi OPTIONS (user 'osmsync', password '!2osm2!');
+GRANT USAGE ON SCHEMA public TO osmsync;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO osmsync;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO osmsync;
+

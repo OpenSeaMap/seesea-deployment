@@ -1,0 +1,14 @@
+= analysis of the psql prozedures
+
+== 
+
+* The web backend writes a new track into osmapi->public.user_tracks().
+  This triggers function osmapi->public.fub_urt() and generates an entry 
+  in table osmapi->public.rpl_journ  al()
+
+* depth->osmapi_tables.pullfromosmapi() 
+  copy entry 
+    from: osmapi_fdw.rpl_journal()
+    to: osmapi_tables.rpl_journal_shadow()
+
+psql -h postgis -p 5432 -U postgres depth -c "select osmapi_tables.pullfromosmapi()"	

@@ -224,15 +224,15 @@ NOTE: states taken form file ProcessingState.java
 - Q: who writes the attribute "num_points" of table "user_tracks"?
   A: see fub_utr() in depth_schema.sql
 
-- Q: Logging: Wie kann das Logging angepasst werden? Momentan landet alles in verschiedenen Dateien, was die Analyse erschwert.
+- Q: Logging: how to configure logging. (log all outputs from eclipse into single logfile)
 
-- Q: Konfiguration: Wie funktioniert die Konfiguration der verschiedenen Module?
+- Q: how to configure the application? 
 
-- Q: HttpDepthDataSync: Wie lässt sich dieses Feature abschalten? Ich vermute, Jens oder Thomas haben es eingebaut, um auch von zu Hause aus entwickeln zu können und die   Upload-Dateien der User vom Delta-Server zu laden. Auf dem Server verursacht es allerdings Probleme, da ich die User-Tracks nicht per HTTP-Download anbieten möchte.
+- Q: HttpDepthDataSync: how to disable the feature? I commented it aout at the moment because its seems not to be required and causes exceptions.
 
-- Q: Datenbank-Leichen: In der Datenbank gibt es viele alte Einträge, die gelöscht werden sollten.
+- Q: Datenbank-Leichen: how to cleanup database?
 
-- Q: Processing: Das Processing scheint wieder zu funktionieren, aber wie testet man die Funktion? Ich suche gerade nach einem Weg, einen Track in der Datenbank zu löschen und das Processing erneut anzustoßen.
+- Q: Processing: How to restart the processing?
 
 - Q: backup - how to backup relevant data (database and database schema, user tracks, sources, docker container scripts and documentation)
 

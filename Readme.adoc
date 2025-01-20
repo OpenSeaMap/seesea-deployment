@@ -9,9 +9,18 @@ operations implemented in the seeSea project.
 
 == clone the sources
 
+via https
+----
+git clone https://github.com/OpenSeaMap/seesea-deployment.git
+cd seesea-deployment
+----
+
+via ssh
 ----
 git clone git@github.com:OpenSeaMap/seesea-deployment.git
+cd seesea-deployment
 ----
+
 
 == create file .env 
 
@@ -30,7 +39,6 @@ Note: do not commit that file into github repository.
 == prepare build directory
 
 ----
-cd seesea-deployment
 ./script/prepare_volumes.sh
 ----
 

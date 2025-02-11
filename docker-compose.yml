@@ -12,8 +12,8 @@ services:
       - ./volumes/postgis/data:/var/lib/postgresql/data
       - ./volumes/postgis/log:/var/log/postgresql/
       - ./volumes/postgis/etc/postgresql/9.6/main/postgresql.conf:/etc/postgresql/9.6/main/postgresql.conf
-      - ./volumes/postgis/etc/postgresql/9.6/main/pg_hba.conf:/etc/postgresql/9.6/main/pg_hba.conf
-      - ./volumes/postgis/etc/postgresql/9.6/main/pg_ident.conf:/etc/postgresql/9.6/main/pg_ident.conf
+      #- ./volumes/postgis/etc/postgresql/9.6/main/pg_hba.conf:/etc/postgresql/9.6/main/pg_hba.conf
+      #- ./volumes/postgis/etc/postgresql/9.6/main/pg_ident.conf:/etc/postgresql/9.6/main/pg_ident.conf
     logging:
       driver: "json-file"
       options:

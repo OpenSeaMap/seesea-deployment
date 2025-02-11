@@ -12,6 +12,7 @@
 - https://depth.openseamap.org/#documentation[depth.openseamap.org - documentation]
 - https://depth.openseamap.org/#contribute[depth.openseamap.org - contrubute]
 - https://wiki.openseamap.org/wiki/OpenSeaMap-dev:Portal[developer wiki]
+-- https://wiki.openseamap.org/wiki/Kategorie:Depth[alles über Wassertiefen im dev-wiki]
 - https://forum.openseamap.org/
 - wiki
 - server / docfiles

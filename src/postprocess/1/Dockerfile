@@ -32,7 +32,8 @@ RUN apt-get install -y --no-install-recommends \
     net-tools \
     iputils-ping \
     cron \
-    rsync
+    rsync \
+    git
 
 # Start running
 USER root

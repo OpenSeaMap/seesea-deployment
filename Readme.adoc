@@ -23,7 +23,6 @@ cd seesea-deployment
 
 
 == create file .env 
-
 create a file with name .env and insert following variables:
 ----
 POSTGRES_USER=admin
@@ -42,7 +41,7 @@ Note: do not commit that file into github repository.
 ./script/prepare_volumes.sh
 ----
 
-== start docker container
+== build and start docker container
 
 ----
 docker compose up -d --build
